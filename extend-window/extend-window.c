@@ -10,29 +10,34 @@
 #include <time.h> // for time()
 #include <sys/epoll.h> // for epoll_create1()
 
+pthread_spinlock_t lock;
+
 // goal -> preempt this thread using timer interrupt and extend the execution of spinTheThread
 void *killTheThread(void *to_kill) {
+	pthread_spin_lock(&lock);
 	clock_t start = clock();
-	printf("(2) Killing thread\n");
 	pthread_t *thread = (pthread_t *)to_kill;
 	if(pthread_cancel(*thread)) {
 		printf("Failed to kill thread\n");
 	}
 	clock_t end = clock();
-	printf("Cycles to kill thread: %ld\n", (long)end-start);
+	pthread_spin_unlock(&lock);
+	printf("Time to kill thread: %7.2fms\n", (double)10e3*(end-start)/CLOCKS_PER_SEC);
 	pthread_exit(NULL);
 }
 
 void *spinTheThread() {
+	pthread_spin_lock(&lock);
 	int o_state;
 	pid_t tid = gettid();
-	printf("(1) Spinning thread: %d\n", tid);
 	cpu_set_t cpu_set;
 	CPU_ZERO(&cpu_set);
 	CPU_SET(0, &cpu_set);
 	sched_setaffinity(tid, sizeof(cpu_set), &cpu_set);
 	// let killTheThread preempt this thread in the loop
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &o_state);
+	sleep(10);
+	pthread_spin_unlock(&lock);
 	while(1) { }
 	pthread_exit(NULL); 
 }
@@ -87,6 +92,7 @@ int cleanup(int *epollfds, int **tfdups, int num_epolls, int num_tfdups) {
 	}
 	if(tfdups != NULL) {
 	free(tfdups);}
+	pthread_spin_destroy(&lock);
 	return 0;
 }
 
@@ -137,12 +143,16 @@ int main(int argc, char **argv) {
 		CPU_SET(1, &cpu_set);
 		sched_setaffinity(getpid(), sizeof(cpu_set), &cpu_set);
 
+		if(pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE)) {
+			fprintf(stderr, "Failed to init spin\n");
+			exit(1);
+		}
 
 		struct itimerspec spec;
 		struct timespec frequency = {0, 0};
 		// the code between timerfr_settime and pthread_create for the killthread takes about ~200K ns
 		// adjust as needed depending on machine 
-		struct timespec initial = {1, 200000}; // 0s, 200000ns
+		struct timespec initial = {0, 200000}; // 0s, 200000ns
 		spec.it_interval = frequency;
 		spec.it_value = initial;
 		
@@ -160,9 +170,10 @@ int main(int argc, char **argv) {
 
 		// Start the spinning thread and occupy core 0 with it
 		pthread_create(&spin_thread, NULL, spinTheThread, NULL);	
-		sleep(1);	
+		printf("(1) Spinning Thread\n");	
 		// Kill spinning thread	
 		pthread_create(&kill_thread, NULL, killTheThread, &spin_thread);
+		printf("(2) Killing Thread\n");
 		
 		// timer should expire here
 		struct epoll_event events[fds_per_instance];

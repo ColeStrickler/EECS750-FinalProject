@@ -14,5 +14,5 @@ $ ./extend-window [-e epoll instances] [-f duplicate fds per epoll instace]
 ```
 
 ## References
-[Racing aginst the lock - Google Project Zero](https://googleprojectzero.blogspot.com/2022/03/racing-against-clock-hitting-tiny.html)
+[Racing aginst the lock - Google Project Zero](https://googleprojectzero.blogspot.com/2022/03/racing-against-clock-hitting-tiny.html) \
 [Epoll Tutorial](https://suchprogramming.com/epoll-in-3-easy-steps/)
