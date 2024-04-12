@@ -17,6 +17,7 @@ run_demo:
 window: 
 	gcc ./src/attacker.c -o attacker -pthread
 	chmod +x attacker
+	sudo setcap cap_sys_admin+ep attacker
 
 run: clean window
 	./attacker 100

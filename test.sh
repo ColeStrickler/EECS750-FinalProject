@@ -1,6 +1,8 @@
 #!/bin/bash
 
 
-for ((i = 1; i <= 370000; i += 200)); do
-    ./attacker 138401
+for ((i = 39000; i <= 60000; i += 10)); do
+    for ((j = 1; j <= 10; j += 1)); do
+        ./attacker $i
+    done
 done
