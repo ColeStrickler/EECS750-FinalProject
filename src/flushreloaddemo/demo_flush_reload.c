@@ -5,13 +5,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "../fr.h"
-char buf[4*1024*1024*255];
-bool take = true;
-#define THRESHOLD 200
-#define TRAIN_SIZE 30000
-
-
 #define L3_CACHE_LINE_SIZE 32768
+
+#define THRESHOLD 250
+#define TRAIN_SIZE 250000
+
+
+char buf[L3_CACHE_LINE_SIZE*255+1];
+bool take = true;
+
 
 char* secret = "This is going to be a very long prompt to test the flush and reload and make sure i got the cache line size correct";
 void branch(char* a)
@@ -92,7 +94,6 @@ int main(int argc, char** argv)
        // break;
         //printf("Found Secret: %s\n", found_secret);
     }
-    //printf("Found Secret: %s\n", found_secret);
 
     return 0;
 }
