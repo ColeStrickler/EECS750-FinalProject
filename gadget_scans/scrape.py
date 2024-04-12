@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import os
 import json
 import sys
@@ -13,22 +15,23 @@ def check_filter(line: str, filters: list) -> bool:
     for filt in filters:
         # filter in file, don't include it
         if filt in file_name:
-            return False
-    return True
+            return True
+    return False
 
 def main(argv):
     if len(argv) < 1:
-        print("Usage: scrape.py [-f filter1,filter2,...] [-i in dir] [-o out file]")
+        print("Usage: scrape.py [-f filter1,filter2,...] [-i in dir] [-o out file] -v")
         sys.exit(1)
     try:
-        opts, args = getopt.getopt(argv, "f:o:i:")
+        opts, args = getopt.getopt(argv, "f:o:i:v")
     except:
-        print("Usage: scrape.py [-f filter1,filter2,...] [-i in dir] [-o out file]")
+        print("Usage: scrape.py [-f filter1,filter2,...] [-i in dir] [-o out file] -v")
         sys.exit(1)
 
     filters = []
     out_file = None
     in_dir = None
+    invert = False
     for opt, arg in opts:
         if opt in ['-f']:
             filters = arg.split(",")
@@ -36,6 +39,8 @@ def main(argv):
             out_file = arg
         elif opt in ['-i']:
             in_dir = arg
+        elif opt in ['-v']:
+            invert = True
 
     if not os.path.exists(in_dir):
         print(f"{in_dir} not found")
@@ -51,7 +56,7 @@ def main(argv):
         if os.path.isfile(path):
             f = open(path, "r")
             for line in f.readlines():
-                if check_filter(line, filters):
+                if check_filter(line, filters) == invert:
                     out.write(line)
             f.close()
     out.close()
