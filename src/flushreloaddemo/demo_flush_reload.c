@@ -5,10 +5,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "../fr.h"
-#define L3_CACHE_LINE_SIZE 32768
+#define L3_CACHE_LINE_SIZE 16384
 
 #define THRESHOLD 250
-#define TRAIN_SIZE 250000
+#define TRAIN_SIZE 50000
 
 
 char buf[L3_CACHE_LINE_SIZE*255+1];

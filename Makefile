@@ -1,6 +1,7 @@
 
 
-
+GHOSTRACE_OBJ = src/build/ipi.c.o\
+ 				src/build/timer.c.o 
 
 all:
 	gcc ./src/main.c -o main
@@ -23,6 +24,15 @@ run: clean window
 	./attacker 100
 
 
+src/build/%.c.o: src/ghostrace/utils/%.c
+	mkdir -p "$(@D)"
+	gcc $< -c -o $@
+
+ghostrace: clean 
+	gcc  -I./src/build  src/ghostrace/utils/ipi.c src/ghostrace/utils/timer.c ./src/ghostrace/ghostrace.c -o ghostrace -pthread 
+	chmod +x ghostrace
+	sudo setcap cap_sys_admin+ep ghostrace
+	./test.sh
 
 clean: 
-	rm -rf main demo attacker test timer
+	rm -rf main demo attacker test timer ghostrace ./src/build/*
