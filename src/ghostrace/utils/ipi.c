@@ -83,3 +83,12 @@ void begin_ipi_storm()
         pthread_create(&ipi_storm_threads[i], NULL, ipi_storm_thread, &thread_args[i]);
     }
 }
+
+
+void kill_ipi()
+{
+    for (int i = 0; i < NUM_THREADS; i++)
+    {
+        pthread_cancel(ipi_storm_threads[i]);
+    }
+}

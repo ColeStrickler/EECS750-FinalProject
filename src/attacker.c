@@ -17,7 +17,7 @@ pthread_spinlock_t lock;
 
 #define SYS_membarrier      324
 
-#define NUM_THREADS         5
+#define NUM_THREADS         10
 #define VICTIM_CPU          0
 #define ATTACKER_CPU        1
 

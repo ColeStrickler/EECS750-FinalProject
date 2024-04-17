@@ -24,5 +24,7 @@ void ipi_storm_thread(void *cpu);
 
 void begin_ipi_storm();
 
+void kill_ipi();
+
 #endif
 
