@@ -20,19 +20,19 @@ window:
 	chmod +x attacker
 	sudo setcap cap_sys_admin+ep attacker
 
-run: clean window
-	./attacker 100
+run: ghostrace
+	./ghostrace 20000 10000 200000
 
 
 src/build/%.c.o: src/ghostrace/utils/%.c
 	mkdir -p "$(@D)"
 	gcc $< -c -o $@
 
-ghostrace: clean 
+ghostrace: clean
 	gcc  -I./src/build  src/ghostrace/utils/ipi.c src/ghostrace/utils/timer.c ./src/ghostrace/ghostrace.c -o ghostrace -pthread 
 	chmod +x ghostrace
 	sudo setcap cap_sys_admin+ep ghostrace
-	./test.sh
+	
 
 clean: 
 	rm -rf main demo attacker test timer ghostrace ./src/build/*

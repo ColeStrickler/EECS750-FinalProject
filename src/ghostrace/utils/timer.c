@@ -122,7 +122,7 @@ void timer_wait()
     		printf("Error epoll waiting\n");
     		break;
     	}
-        begin_ipi_storm();
+       //begin_ipi_storm();
         return;
     }
 }

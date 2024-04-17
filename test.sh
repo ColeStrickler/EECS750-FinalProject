@@ -1,6 +1,6 @@
 #!/bin/bash
 
 
-for ((i = 21000; i < 30000; i += 10)); do
-    ./ghostrace $i 10000
+for ((i =  165000; i <  1000000; i += 1)); do
+    ./ghostrace 20000 10000 $i
 done
