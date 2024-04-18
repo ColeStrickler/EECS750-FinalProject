@@ -64,6 +64,7 @@ void ipi_storm_thread(void *cpu)
    
     int cpu_num = *(int*)cpu;
     pin_cpu(cpu_num);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
     while(1)
     {
         int ret = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED_RSEQ, MEMBARRIER_CMD_FLAG_CPU, VICTIM_CPU);

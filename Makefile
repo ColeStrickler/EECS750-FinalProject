@@ -31,7 +31,7 @@ src/build/%.c.o: src/ghostrace/utils/%.c
 	gcc $< -c -o $@
 
 ghostrace: clean
-	gcc -O3 -I./src/build  src/ghostrace/utils/ipi.c src/ghostrace/utils/timer.c ./src/ghostrace/ghostrace.c -o ghostrace -pthread 
+	gcc -O3 -fno-stack-protector -I./src/build  src/ghostrace/utils/ipi.c src/ghostrace/utils/timer.c ./src/ghostrace/ghostrace.c -o ghostrace -pthread 
 	chmod +x ghostrace
 	sudo setcap cap_sys_admin+ep ghostrace
 	

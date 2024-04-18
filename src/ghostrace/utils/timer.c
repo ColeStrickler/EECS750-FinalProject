@@ -57,16 +57,24 @@ int init_tfdups(int tfd, int **tfdups, int *epollfds, int num_epolls, int num_tf
 int cleanup(int *epollfds, int **tfdups, int num_epolls, int num_tfdups) {
 	// close epoll fds
 	for(int i=0; i<num_epolls; i++){
+		//printf("closing 1\n");
 		close(epollfds[i]);
-		if(tfdups != NULL) {
-		for(int j = 0; j < num_tfdups; j++)
-		{
-			close(tfdups[i][j]);
+		if(tfdups[i] != NULL) {
+			for(int j = 0; j < num_tfdups; j++)
+			{
+				//printf("closing2 %d\n", j);
+				close(tfdups[i][j]);
+			}
+			//printf("free1 %d\n", i);
+			free(tfdups[i]);
+			tfdups[i] = NULL;
 		}
-		free(tfdups[i]);}
 	}
+	//printf("free 2\n");
 	if(tfdups != NULL) {
-	    free(tfdups);}
+	    free(tfdups);
+		tfdups = NULL;	
+	}
 	//pthread_spin_destroy(&lock);
 	return 0;
 }
@@ -123,7 +131,6 @@ void timer_wait()
     		break;
     	}
        //begin_ipi_storm();
-        return;
     }
 }
 
