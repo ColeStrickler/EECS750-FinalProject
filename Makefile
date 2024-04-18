@@ -23,7 +23,7 @@ window:
 	./attacker 2
 
 run: ghostrace
-	./ghostrace 20000 100000 200000
+	./ghostrace 20000 10000000 200000
 
 
 src/build/%.c.o: src/ghostrace/utils/%.c

