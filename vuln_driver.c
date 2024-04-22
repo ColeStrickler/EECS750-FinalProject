@@ -12,6 +12,8 @@
 #define IOCTL_COMMAND_HOLD          _IO('k', 2)
 #define IOCTL_COMMAND_TRANSMIT      _IO('k', 3)
 #define IOCTL_COMMAND_RELEASE       _IO('k', 4)
+#define IOCTL_COMMAND_REALLOC       _IO('k', 5)
+
 #define THRESHOLD 250
 #define L3_CACHE_LINE_SIZE 4096*4
 #define flush(p) \
@@ -43,7 +45,7 @@ static inline unsigned long probe_timing(char *adrs) {
 }
 
 
-typedef void (*callback_t)(int* arg);
+typedef void (*callback_t)(char* arg);
 typedef struct victim_struct
 {
     callback_t callback;
@@ -68,15 +70,29 @@ static struct class *myclass = NULL;
 static struct device *dev;
 char* buf;
 
+/*
+    STATE VARIABLES
+*/
+static int freed = 0;
+struct victim_struct* v_st;
+struct attack_struct* a_st;
+
+
+
 void flush_buf(void)
 {
     flush(&lock);
 }
 
+void benign_callback(char* arg)
+{
+    return;
+}
 
 char spectre_read(void)
 {
     char c = 0x0;
+
     for (int j = 0; j < 255; j++)
     {
         unsigned long timing;
@@ -110,6 +126,28 @@ void train_mutex(void)
     }
 }
 
+void realloc(void)
+{
+    v_st = kmalloc(sizeof(victim_struct), GFP_KERNEL);
+    v_st->callback = benign_callback;
+    freed = 0;
+}
+
+void section_critical(char* arg)
+{
+    printk("2. crit section\n");
+    if (likely(mutex_trylock(&lock) == 1))
+    {
+        v_st->callback(arg);
+        kfree(v_st);
+        mutex_unlock(&lock);
+    }
+    
+    freed = 1;
+    printk("end crit section\n");
+}
+
+
 static long ioctl_dispatch(struct file *file, unsigned int cmd, unsigned long arg) {
     int ret = 0;
     switch (cmd) {
@@ -121,29 +159,49 @@ static long ioctl_dispatch(struct file *file, unsigned int cmd, unsigned long ar
         }
         case IOCTL_COMMAND_HOLD:
         {
-            printk("IOCTL_COMMAND_HOLD\n");
-            mutex_lock(&lock);
-            flush_buf();
+            printk("1. IOCTL_COMMAND_HOLD\n");
+            section_critical(NULL);
             break;
         }
         case IOCTL_COMMAND_TRANSMIT:
         {
+            printk("3. IOCTL_COMMAND_TRANSMIT\n");
             struct ioctl_data data;
-            
+            if (freed)
+            {
+                printk("Already freed.\n");
+                return __UINT32_MAX__;
+            }
+            struct victim_struct* a_st = kmalloc(sizeof(victim_struct), GFP_KERNEL);
+            if (a_st != v_st)
+            {
+                kfree(a_st);
+                printk("UAF failed!\n");
+                return __UINT32_MAX__;
+            }
+            a_st->callback = leak_secret;
+
             int err;
             if ((err = copy_from_user(&data, (struct ioctl_data *)arg, sizeof(struct ioctl_data)))) 
                 return -EFAULT; // Error copying data
-            if (likely(mutex_trylock(&lock) == 1))
-            {
-                //leak_secret(data.address + data.offset);
-                leak_secret(SECRET + data.offset);
-            }
+
+            flush_buf();
+            section_critical(SECRET + data.offset);
+           
             ret = spectre_read();
             break;
         }
         case IOCTL_COMMAND_RELEASE:
         {
+            printk("IOCTL_COMMAND_HOLD\n");
             mutex_unlock(&lock);
+            kfree(a_st);
+            break;
+        }
+        case IOCTL_COMMAND_REALLOC:
+        {
+            printk("IOCTL_COMMAND_REALLOC\n");
+            realloc();
             break;
         }
         default:
@@ -185,7 +243,7 @@ static int __init driver_entry(void)
         printk(KERN_ERR "Failed to allocate memory\n");
         return -1;
     }
-
+    realloc();
 
     printk("Major number assignment: %d", MAJOR_NUMBER);
     printk("Device created on /dev/%s\n", DEVICE_NAME); 
@@ -195,7 +253,6 @@ static int __init driver_entry(void)
  
 static void __exit driver_exit(void) 
 { 
-
     device_destroy(cls, MKDEV(MAJOR_NUMBER, 0));
     class_destroy(cls);
     unregister_chrdev(MAJOR_NUMBER, DEVICE_NAME);

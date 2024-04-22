@@ -33,7 +33,7 @@ $(MODULE_NAME).ko : $(MODULE_NAME).o driver_com
 	$(MAKE) -C $(KERNEL_SRC) M=$(PWD) modules
 	
 driver_com:
-	gcc src/driver/utils/ipi.c src/driver/utils/timer.c src/driver/io_driver_com.c -o io_driver_com 
+	gcc src/driver/utils/ipi.c src/driver/utils/timer.c src/driver/io_driver_com.c -o io_driver_com -pthread
 	chmod +x io_driver_com
 
 cp_driver: 
@@ -59,7 +59,7 @@ view:
 clean:
 	rm -rf main demo attacker test timer ghostrace ./src/build/* ./vuln_driver.c ./io_driver_com
 	$(MAKE) -C $(KERNEL_SRC) M=$(PWD) clean
-	make remove
+	
 
 
 # clean is not a file
