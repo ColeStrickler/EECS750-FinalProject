@@ -7,7 +7,7 @@
 #define ATTACKER_CPU 1
 #define L3_CACHE_LINE_SIZE 4096*4
 #define THRESHOLD 250
-#define NUM_THREADS 22
+#define NUM_THREADS 15
 
 typedef void (*callback_t)(int* arg);
 typedef struct victim_struct
