@@ -22,6 +22,8 @@ char buf[L3_CACHE_LINE_SIZE*255+1];
 char* DRIVER_NAME = "/dev/vuln_driver";
 int fd;
 pthread_t victim;
+int missed_race_condition = 0;
+
 
 struct ioctl_data {
     uint64_t address;
@@ -47,9 +49,7 @@ int do_ioctl_data(int ctl_code, struct ioctl_data* data)
     int ret;
     ret = ioctl(fd, ctl_code, data);
     if (ret < 0) {
-        perror("IOCTL command failed");
-        close(fd);
-        exit(EXIT_FAILURE);
+        missed_race_condition++;
     }
     return ret;
 }
@@ -182,6 +182,7 @@ int main(int argc, char** argv) {
     float result = (float)hits / (float)(hits + misses);
 
     printf("Accuracy: %.2f --> hits=%ld, misses=%ld, total=%ld\n", result, hits, misses, hits + misses);
+    printf("Race condition accuracy: %.2f\n", 1.0f - (float)missed_race_condition/(float)(hits+misses));
     printf("Leak rate: %.2fb/s\n", (double)strlen(actual)/cpu_time_used);
     return EXIT_SUCCESS;
 }

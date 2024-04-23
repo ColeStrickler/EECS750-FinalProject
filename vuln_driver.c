@@ -141,7 +141,7 @@ int section_critical(char* arg)
     { 
         v_st->callback(arg);
         a_st = v_st;
-         local_irq_enable();
+        local_irq_enable();
         //kfree(v_st);
         x = 32980354234;
 
@@ -149,10 +149,10 @@ int section_critical(char* arg)
             Simulate kfree()'s irq enable spot
         */
        
-        for (int i = 0; i < 100000; i++)
-        {
-            x *= i;
-        }
+        //for (int i = 0; i < 1000; i++)
+        //{
+        //    x *= i;
+        //}
         v_st = NULL;
         mutex_unlock(&lock);
         freed = 1;
