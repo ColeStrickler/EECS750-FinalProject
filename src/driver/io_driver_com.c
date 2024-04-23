@@ -8,6 +8,7 @@
 #include "utils/fr.h"
 #include "utils/timer.h"
 #include "utils/ipi.h"
+#include <sys/time.h>
 #define IOCTL_COMMAND_TRAIN         _IO('k', 1)
 #define IOCTL_COMMAND_HOLD          _IO('k', 2)
 #define IOCTL_COMMAND_TRANSMIT      _IO('k', 3)
@@ -23,7 +24,7 @@ char* DRIVER_NAME = "/dev/vuln_driver";
 int fd;
 pthread_t victim;
 int missed_race_condition = 0;
-
+struct timeval start, end;
 
 struct ioctl_data {
     uint64_t address;
@@ -126,7 +127,7 @@ int main(int argc, char** argv) {
     pin_cpu(ATTACKER_CPU);
 
     printf("\n");
-    clock_t start = clock();
+    gettimeofday(&start, NULL); // Get start time
     for (int i = 0; i < strlen(actual); i++)
     {
         for (int j = 0; j < 500; j++)
@@ -172,9 +173,12 @@ int main(int argc, char** argv) {
         
     }   
     // Example of sending IOCTL command 1
-    clock_t end = clock();
-    double cpu_time_used = ((double)(end-start))/CLOCKS_PER_SEC;
+    gettimeofday(&end, NULL); // Get end time
+
+    double cpu_time_used = ((double)(end.tv_sec-start.tv_sec));
+    double leak_rate = ((double)strlen(actual))/cpu_time_used;
     printf("\n");
+    printf("Total time: %.2lf seconds\n", cpu_time_used);
     // Close the device file
     close(fd);
     printf("ret: %d\n", ret);
@@ -183,6 +187,6 @@ int main(int argc, char** argv) {
 
     printf("Accuracy: %.2f --> hits=%ld, misses=%ld, total=%ld\n", result, hits, misses, hits + misses);
     printf("Race condition accuracy: %.2f\n", 1.0f - (float)missed_race_condition/(float)(hits+misses));
-    printf("Leak rate: %.2fb/s\n", (double)strlen(actual)/cpu_time_used);
+    printf("Leak rate: %.2lfb/s\n", leak_rate);
     return EXIT_SUCCESS;
 }
