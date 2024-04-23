@@ -17,7 +17,7 @@ GhostRace Contributions that we reimplemented:
 The GhostRace authors provided a simple POC (https://github.com/vusec/ghostrace), which we extended to utilize all of the forementioned techniques.
 
 # Build
-All code can be built via the Makefile
+All code can be built via the Makefile. Run test.sh to test driver/
 
 # Source
 There are 4 sections of source code that successively build on top of each other. These roughly mirror the order we went about building out this project.
