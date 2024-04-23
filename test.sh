@@ -14,6 +14,6 @@ make driver
 make remove
 make install
 
-for ((i =  100; i < 1000000; i += 100)); do
+for ((i =  1; i < 100; i += 1)); do
     ./io_driver_com 100 0
 done

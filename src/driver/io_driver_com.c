@@ -132,21 +132,24 @@ int main(int argc, char** argv) {
     {
         for (int j = 0; j < 500; j++)
         {
-            //printf("j %d\n", j);
             ipi_register(NUM_THREADS);
+            // Register timer and allocate needed resources
             timer_init(timer_length);
-            ret = do_ioctl(IOCTL_COMMAND_TRAIN);
-            // Example of sending IOCTL command 2
-            
+            // train lock
+            ret = do_ioctl(IOCTL_COMMAND_TRAIN);  
             struct ioctl_data data;
             data.buf = buf;
             data.offset = i;
 
-
+            // start the victim thread
             start_victim();
-           // ipi_delay(num_pid);
+           /*
+            ipi_delay(num_pid);
+            delay may or may not be necessary
+           */ 
             
             begin_ipi_storm();
+            // speculative transmission
             char c = do_ioctl_data(IOCTL_COMMAND_TRANSMIT, &data);
             if (c == actual[i])
             {
@@ -163,16 +166,15 @@ int main(int argc, char** argv) {
                 misses++;
             ret = kill_ipi();    
             
-            
+            /*
+                Resource cleanup
+            */
             timer_cleanup();
             pthread_join(victim, &ret);
             ret = do_ioctl(IOCTL_COMMAND_REALLOC);
-            
-            //printf("here4\n");
         }
         
     }   
-    // Example of sending IOCTL command 1
     gettimeofday(&end, NULL); // Get end time
 
     double cpu_time_used = ((double)(end.tv_sec-start.tv_sec));
