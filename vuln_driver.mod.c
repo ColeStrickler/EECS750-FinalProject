@@ -50,6 +50,7 @@ __used __section("__versions") = {
 	{ 0xbb9ed3bf, "mutex_trylock" },
 	{ 0x3213f038, "mutex_unlock" },
 	{ 0x65487097, "__x86_indirect_thunk_rax" },
+	{ 0x75853f8f, "pv_ops" },
 	{ 0x13c49cc2, "_copy_from_user" },
 	{ 0xf0fdf6cb, "__stack_chk_fail" },
 	{ 0xbdfb6dbb, "__fentry__" },
@@ -60,4 +61,4 @@ __used __section("__versions") = {
 MODULE_INFO(depends, "");
 
 
-MODULE_INFO(srcversion, "BE0AE8506666383A12B5C24");
+MODULE_INFO(srcversion, "BB4A39498DDC7C10BB83930");

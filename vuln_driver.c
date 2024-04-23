@@ -75,7 +75,7 @@ char* buf;
 */
 static int freed = 0;
 struct victim_struct* v_st;
-struct attack_struct* a_st;
+struct victim_struct* a_st;
 
 
 
@@ -119,7 +119,7 @@ void leak_secret(char *c)
 
 void train_mutex(void)
 {
-    for (int i = 0; i < 1000000; i++)
+    for (int i = 0; i < 10000; i++)
     {
         mutex_trylock(&lock);
         mutex_unlock(&lock);
@@ -127,24 +127,36 @@ void train_mutex(void)
 }
 
 void realloc(void)
-{
+{   kfree(a_st); // got moved to here for memory management
     v_st = kmalloc(sizeof(victim_struct), GFP_KERNEL);
-    v_st->callback = benign_callback;
-    freed = 0;
+    if (v_st)
+        v_st->callback = benign_callback;
 }
 
-void section_critical(char* arg)
+int section_critical(char* arg)
 {
-    printk("2. crit section\n");
+    //printk("2. crit section\n");
+    int x = 0;
     if (likely(mutex_trylock(&lock) == 1))
-    {
+    { 
         v_st->callback(arg);
-        kfree(v_st);
+        a_st = v_st;
+        //kfree(v_st);
+        x = 32980354234;
+        //printk("here!\n");
+        local_irq_enable();
+        for (int i = 0; i < 1000000; i++)
+        {
+            x *= i;
+        }
+        v_st = NULL;
         mutex_unlock(&lock);
+        freed = 1;
+        printk("released!\n");
     }
     
-    freed = 1;
-    printk("end crit section\n");
+    //printk("end crit section\n");
+    return x;
 }
 
 
@@ -153,33 +165,30 @@ static long ioctl_dispatch(struct file *file, unsigned int cmd, unsigned long ar
     switch (cmd) {
         case IOCTL_COMMAND_TRAIN:
         {
-            printk("IOCTL_COMMAND_TRAIN\n");
+            //printk("IOCTL_COMMAND_TRAIN\n");
             train_mutex();
             break;
         }
         case IOCTL_COMMAND_HOLD:
-        {
+        {   
+            local_irq_disable();
             printk("1. IOCTL_COMMAND_HOLD\n");
+           
             section_critical(NULL);
+            local_irq_enable();
             break;
         }
         case IOCTL_COMMAND_TRANSMIT:
         {
             printk("3. IOCTL_COMMAND_TRANSMIT\n");
             struct ioctl_data data;
-            if (freed)
+            if (v_st == NULL)
             {
                 printk("Already freed.\n");
                 return __UINT32_MAX__;
             }
-            struct victim_struct* a_st = kmalloc(sizeof(victim_struct), GFP_KERNEL);
-            if (a_st != v_st)
-            {
-                kfree(a_st);
-                printk("UAF failed!\n");
-                return __UINT32_MAX__;
-            }
-            a_st->callback = leak_secret;
+            
+            v_st->callback = leak_secret;
 
             int err;
             if ((err = copy_from_user(&data, (struct ioctl_data *)arg, sizeof(struct ioctl_data)))) 
@@ -195,13 +204,13 @@ static long ioctl_dispatch(struct file *file, unsigned int cmd, unsigned long ar
         {
             printk("IOCTL_COMMAND_HOLD\n");
             mutex_unlock(&lock);
-            kfree(a_st);
             break;
         }
         case IOCTL_COMMAND_REALLOC:
         {
             printk("IOCTL_COMMAND_REALLOC\n");
             realloc();
+            printk("IOCTL_COMMAND_REALLOC finished\n");
             break;
         }
         default:

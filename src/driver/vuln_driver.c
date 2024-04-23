@@ -144,7 +144,8 @@ int section_critical(char* arg)
         //kfree(v_st);
         x = 32980354234;
         //printk("here!\n");
-        for (int i = 0; i < 15000000; i++)
+        local_irq_enable();
+        for (int i = 0; i < 1000000; i++)
         {
             x *= i;
         }
@@ -169,9 +170,12 @@ static long ioctl_dispatch(struct file *file, unsigned int cmd, unsigned long ar
             break;
         }
         case IOCTL_COMMAND_HOLD:
-        {
+        {   
+            local_irq_disable();
             printk("1. IOCTL_COMMAND_HOLD\n");
+           
             section_critical(NULL);
+            local_irq_enable();
             break;
         }
         case IOCTL_COMMAND_TRANSMIT:
