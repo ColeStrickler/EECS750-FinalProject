@@ -33,7 +33,7 @@ $(MODULE_NAME).ko : $(MODULE_NAME).o driver_com
 	$(MAKE) -C $(KERNEL_SRC) M=$(PWD) modules
 	
 driver_com:
-	gcc src/driver/utils/ipi.c src/driver/utils/timer.c src/driver/io_driver_com.c -o io_driver_com -pthread
+	gcc -O2 src/driver/utils/ipi.c src/driver/utils/timer.c src/driver/io_driver_com.c -o io_driver_com -pthread
 	chmod +x io_driver_com
 
 cp_driver: 

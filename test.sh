@@ -2,5 +2,5 @@
 
 
 for ((i =  165000; i <  1000000; i += 1)); do
-    ./ghostrace 20000 100000 200000
+    ./io_driver_com 800000 0
 done

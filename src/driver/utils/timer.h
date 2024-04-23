@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <sched.h>
 #include "ipi.h"
-#define EPOLL_INSTANCES     1900
+#define EPOLL_INSTANCES     100
 #define FD_PER_EPOLL        500
 #define VICTIM_CPU          0
 

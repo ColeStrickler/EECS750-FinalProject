@@ -23,8 +23,7 @@ void pin_cpu(int cpu);
 void ipi_storm_thread(void *cpu);
 
 void begin_ipi_storm();
-
-void kill_ipi();
+int kill_ipi();
 
 #endif
 

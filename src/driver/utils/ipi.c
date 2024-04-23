@@ -86,10 +86,12 @@ void begin_ipi_storm()
 }
 
 
-void kill_ipi()
+int kill_ipi()
 {
+    int ret;
     for (int i = 0; i < NUM_THREADS; i++)
     {
-        pthread_cancel(ipi_storm_threads[i]);
+        ret = pthread_cancel(ipi_storm_threads[i]);
     }
+    return ret;
 }

