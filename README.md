@@ -10,9 +10,18 @@ GhostRace Contributions that we reimplemented:
 - technique to arbitrarily extend UAF window
 - exploitation of speculative race conditions to leak kernel memory
 - investigation of prevalence of SCUAF gadgets in the most recent kernel versions
+- Flush+Reload covert channel implemtentation
 
 
 
 The GhostRace authors provided a simple POC (https://github.com/vusec/ghostrace), which we extended to utilize all of the forementioned techniques.
 
+# Build
+All code can be built via the Makefile
 
+# Source
+There are 4 sections of source code that successively build on top of each other. These roughly mirror the order we went about building out this project.
+- flushreloaddemo/ --> This project demonstrates how flush+reload techniques can be used to leak arbitrary process memory
+- window/ --> This project demonstrates how to combine high precision timers, timer interrupt extension techniques, and  an IPI storm to arbitrarily unbound interrupt lifetime
+- ghostrace/ --> This project combines the two previous projects to implement the GhostRace attack in user space
+- driver/ --> This project implements a driver vulnerable to GhostRace and entering kernel mode allows us to use the surgical interruption technique using high precision timers to facilitate GhostRace in the kernel
