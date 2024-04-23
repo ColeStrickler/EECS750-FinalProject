@@ -141,11 +141,15 @@ int section_critical(char* arg)
     { 
         v_st->callback(arg);
         a_st = v_st;
+         local_irq_enable();
         //kfree(v_st);
         x = 32980354234;
-        //printk("here!\n");
-        local_irq_enable();
-        for (int i = 0; i < 1000000; i++)
+
+        /*
+            Simulate kfree()'s irq enable spot
+        */
+       
+        for (int i = 0; i < 100000; i++)
         {
             x *= i;
         }

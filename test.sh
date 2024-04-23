@@ -1,6 +1,10 @@
 #!/bin/bash
 
+make clean
+make driver
+make remove
+make install
 
-for ((i =  10000; i <  1000000; i += 1)); do
+for ((i =  100; i < 1000000; i += 100)); do
     ./io_driver_com $i 0
 done
