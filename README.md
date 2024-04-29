@@ -19,6 +19,7 @@ The GhostRace authors provided a simple POC (https://github.com/vusec/ghostrace)
 # Build
 All code can be built via the Makefile. Run test.sh to test driver/
 
+NOTE: you will need kernel headers installed to compile driver/
 NOTE: you will need to adjust various parameters such as the number of threads and cache line size to make this work on your machine
 
 # Source
