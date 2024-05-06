@@ -45,19 +45,39 @@ def device_driver_stats(gadgets):
             result.append(f)
     return result, {"driver":driver,"bluetooth":bluetooth,"sound":sound,"net":net,"other":other}
 
+def same_struct(free, use):
+    structs = {}
+    for gadgets in [free,use]:
+        for f in gadgets:
+            for (_,_,ptr) in gadgets[f]:
+                if ptr in structs:
+                    structs[ptr] += 1
+                else:
+                    structs[ptr] = 1
+    return len(list(filter(lambda x: x > 1, structs.values())))
+
 def in_both_stats(free, use):
-    num = 0
+    both_wo = 0
+    both_w = 0
     refined = {}
     shared_files = list(set(list(free.keys())) & set(list(use.keys())))
     for f in shared_files:
-        funcs1 = [(r,ptr) for (r,_,ptr) in free[f]]
-        funcs2 = [(r,ptr) for (r,_,ptr) in use[f]]
-        join = list(set(funcs1) & set(funcs2))
-        num_shared = len(join)
+        funcs1 = [(r, ptr) for (r,_,ptr) in free[f]]
+        funcs2 = [(r, ptr) for (r,_,ptr) in use[f]]
+        join_w = list(set(funcs1) & set(funcs2))
+        num_shared = len(join_w)
         if num_shared > 0:
-            num += num_shared
-            refined[f] = join
-    return refined, {"in_both":num}
+            both_w += num_shared
+            refined[f] = join_w
+
+        funcs1_fil = list(filter(lambda x:x[0], funcs1))
+        funcs2_fil = list(filter(lambda x:x[0], funcs2))
+        join_wo = list(set(funcs1_fil) & set(funcs2_fil))
+        num_shared = len(join_wo)
+        if num_shared > 0:
+            both_wo += num_shared
+
+    return refined, {"both_without_ptr": both_wo, "both_with_ptr":both_w}
 
 def parse_gadget(s: str) -> tuple:
     gadget_info = s.split("REPORT @")
@@ -137,17 +157,22 @@ def run(argv):
     num_use = sum([len(gadgets) for gadgets in USE_GADGETS.values()])
     total = num_free + num_use
 
-    refined, stats = in_both_stats(FREE_GADGETS, USE_GADGETS)
-    print(f"\t{stats}")
-    print("=== Refined Statistics : Free and Use the same function ===")
-    results, stats = device_driver_stats(refined)
+    _, overall_use = device_driver_stats(USE_GADGETS)
+    _, overall_free = device_driver_stats(FREE_GADGETS)
+    refined, both = in_both_stats(FREE_GADGETS, USE_GADGETS)
+    fu = same_struct(FREE_GADGETS, USE_GADGETS) 
+
+    print("=== Refined Statistics :  ===")
     print(f"\t Total Gadgets: {total}")
-    print(f"\t {stats}")
+    print(f"\t ND: {overall_use['other'] + overall_free['other']}")
+    print(f"\t C: {both['both_without_ptr']}")
+    print(f"\t FU: {fu}")
+    print(f"\t FU + C: {both['both_with_ptr']}")
+    results, all_filters = device_driver_stats(refined)
+    print(f"\t FU + C + ND: {all_filters['other']}")
     for r_f in results:
         print(f"\t{r_f}: {refined[r_f]}")
 
-    _, overall_use = device_driver_stats(USE_GADGETS)
-    _, overall_free = device_driver_stats(FREE_GADGETS)
 
     #plt.style.use("ieee")
     plt.figure()
