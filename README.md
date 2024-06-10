@@ -4,6 +4,7 @@ This project reimplements the techniques shown in the GhostRace paper https://ww
 
 GhostRace investigates the impact of microarchitectural attacks on synchronization primitives and also the feasibility of their exploitation.
 
+See our technical report: https://github.com/ColeStrickler/EECS750-FinalProject/blob/main/ghostrace-final.pdf
 
 GhostRace Contributions that we reimplemented:
 - technique to surgically interrupt arbitrary kernel threads
